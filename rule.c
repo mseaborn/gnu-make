@@ -274,6 +274,34 @@ convert_to_pattern (void)
 }
 
 
+static int
+rule_targets_superset (struct rule *rule1, struct rule *rule2)
+{
+  int i;
+  for (i = 0; i < rule1->num; i++)
+    {
+      int j;
+      for (j = 0; j < rule2->num; j++)
+	if (!streq (rule1->targets[i], rule2->targets[j]))
+	  break;
+      if (rule2->targets[j] == NULL)
+	return 1;
+    }
+  return 0;
+}
+
+static int
+rule_dependency_lists_equal (struct rule *rule1, struct rule *rule2)
+{
+  struct dep *dep1, *dep2;
+  for (dep1 = rule1->deps, dep2 = rule2->deps;
+       dep1 != NULL && dep2 != NULL;
+       dep1 = dep1->next, dep2 = dep2->next)
+    if (!streq (dep_name (dep1), dep_name (dep2)))
+      return 0;
+  return dep1 == NULL && dep2 == NULL;
+}
+
 /* Install the pattern rule RULE (whose fields have been filled in) at the end
    of the list (so that any rules previously defined will take precedence).
    If this rule duplicates a previous one (identical target and dependencies),
@@ -285,7 +313,6 @@ static int
 new_pattern_rule (struct rule *rule, int override)
 {
   struct rule *r, *lastrule;
-  unsigned int i, j;
 
   rule->in_use = 0;
   rule->terminal = 0;
@@ -295,45 +322,33 @@ new_pattern_rule (struct rule *rule, int override)
   /* Search for an identical rule.  */
   lastrule = 0;
   for (r = pattern_rules; r != 0; lastrule = r, r = r->next)
-    for (i = 0; i < rule->num; ++i)
-      {
-	for (j = 0; j < r->num; ++j)
-	  if (!streq (rule->targets[i], r->targets[j]))
-	    break;
-        /* If all the targets matched...  */
-	if (j == r->num)
-	  {
-	    struct dep *d, *d2;
-	    for (d = rule->deps, d2 = r->deps;
-		 d != 0 && d2 != 0; d = d->next, d2 = d2->next)
-	      if (!streq (dep_name (d), dep_name (d2)))
-		break;
-	    if (d == 0 && d2 == 0)
-	      {
-		/* All the dependencies matched.  */
-		if (override)
-		  {
-		    /* Remove the old rule.  */
-		    freerule (r, lastrule);
-		    /* Install the new one.  */
-		    if (pattern_rules == 0)
-		      pattern_rules = rule;
-		    else
-		      last_pattern_rule->next = rule;
-		    last_pattern_rule = rule;
+    {
+      if (rule_targets_superset (rule, r) &&
+	  rule_dependency_lists_equal (rule, r))
+	{
+	  /* All the dependencies matched.  */
+	  if (override)
+	    {
+	      /* Remove the old rule.  */
+	      freerule (r, lastrule);
+	      /* Install the new one.  */
+	      if (pattern_rules == 0)
+		pattern_rules = rule;
+	      else
+		last_pattern_rule->next = rule;
+	      last_pattern_rule = rule;
 
-		    /* We got one.  Stop looking.  */
-		    goto matched;
-		  }
-		else
-		  {
-		    /* The old rule stays intact.  Destroy the new one.  */
-		    freerule (rule, (struct rule *) 0);
-		    return 0;
-		  }
-	      }
-	  }
-      }
+	      /* We got one.  Stop looking.  */
+	      goto matched;
+	    }
+	  else
+	    {
+	      /* The old rule stays intact.  Destroy the new one.  */
+	      freerule (rule, (struct rule *) 0);
+	      return 0;
+	    }
+	}
+    }
 
  matched:;
 

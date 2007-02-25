@@ -340,35 +340,39 @@ rule_dependency_lists_equal (struct rule *rule1, struct rule *rule2)
 static int
 new_pattern_rule (struct rule *rule, int override)
 {
-  struct rule *r;
+  int i;
 
   rule->in_use = 0;
   rule->terminal = 0;
 
-  /* Search for an identical rule.  */
-  for (r = pattern_rules.next; !r->list_head; r = r->next)
+  /* Search for an existing rule to replace. */
+  for (i = 0; i < rule->num; i++)
     {
-      if (rule_targets_superset (rule, r) &&
-	  rule_dependency_lists_equal (rule, r))
-	{
-	  /* All the dependencies matched.  */
-	  if (override)
-	    {
-	      remove_rule (r);
-	      free_rule (r);
-	      
-	      add_rule (rule);
-	      
-	      /* We got one.  Stop looking.  */
-	      return 1;
-	    }
-	  else
-	    {
-	      /* The old rule stays intact.  Destroy the new one.  */
-	      free_rule (rule);
-	      return 0;
-	    }
-	}
+      struct rule_target_list key, *list;
+      key.target = rule->targets[i];
+      list = hash_find_item (&rules_by_target, &key);
+      for (; list != NULL; list = list->next)
+  	{
+ 	  struct rule *old_rule = list->rule;
+ 	  if (rule_targets_superset (rule, old_rule) &&
+ 	      rule_dependency_lists_equal (rule, old_rule))
+  	    {
+ 	      /* All the dependencies matched.  */
+ 	      if (override)
+ 		{
+ 		  remove_rule (old_rule);
+ 		  free_rule (old_rule);
+ 		  add_rule (rule);
+ 		  return 1;
+ 		}
+ 	      else
+ 		{
+ 		  /* The old rule stays intact.  Destroy the new one.  */
+ 		  free_rule (rule);
+ 		  return 0;
+ 		}
+  	    }
+  	}
     }
 
   /* There was no rule to replace.  */

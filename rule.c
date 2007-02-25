@@ -27,15 +27,13 @@ this program.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "variable.h"
 #include "rule.h"
 
-static void freerule (struct rule *rule, struct rule *lastrule);
+static void add_rule (struct rule *rule);
+static void remove_rule (struct rule *rule);
+static void free_rule (struct rule *rule);
 
 /* Chain of all pattern rules.  */
 
-struct rule *pattern_rules;
-
-/* Pointer to last rule in the chain, so we can add onto the end.  */
-
-struct rule *last_pattern_rule;
+struct rule pattern_rules = { 1, &pattern_rules, &pattern_rules };
 
 /* Number of rules in the chain.  */
 
@@ -78,7 +76,7 @@ count_implicit_rule_limits (void)
 
   name = 0;
   namelen = 0;
-  for (rule = pattern_rules; rule != NULL; rule = rule->next)
+  for (rule = pattern_rules.next; !rule->list_head; rule = rule->next)
     {
       unsigned int ndeps = 0;
       struct dep *dep;
@@ -305,16 +303,13 @@ rule_dependency_lists_equal (struct rule *rule1, struct rule *rule2)
 static int
 new_pattern_rule (struct rule *rule, int override)
 {
-  struct rule *r, *lastrule;
+  struct rule *r;
 
   rule->in_use = 0;
   rule->terminal = 0;
 
-  rule->next = 0;
-
   /* Search for an identical rule.  */
-  lastrule = 0;
-  for (r = pattern_rules; r != 0; lastrule = r, r = r->next)
+  for (r = pattern_rules.next; !r->list_head; r = r->next)
     {
       if (rule_targets_superset (rule, r) &&
 	  rule_dependency_lists_equal (rule, r))
@@ -322,40 +317,44 @@ new_pattern_rule (struct rule *rule, int override)
 	  /* All the dependencies matched.  */
 	  if (override)
 	    {
-	      /* Remove the old rule.  */
-	      freerule (r, lastrule);
-	      /* Install the new one.  */
-	      if (pattern_rules == 0)
-		pattern_rules = rule;
-	      else
-		last_pattern_rule->next = rule;
-	      last_pattern_rule = rule;
-
+	      remove_rule (r);
+	      free_rule (r);
+	      
+	      add_rule (rule);
+	      
 	      /* We got one.  Stop looking.  */
-	      goto matched;
+	      return 1;
 	    }
 	  else
 	    {
 	      /* The old rule stays intact.  Destroy the new one.  */
-	      freerule (rule, (struct rule *) 0);
+	      free_rule (rule);
 	      return 0;
 	    }
 	}
     }
 
- matched:;
-
-  if (r == 0)
-    {
-      /* There was no rule to replace.  */
-      if (pattern_rules == 0)
-	pattern_rules = rule;
-      else
-	last_pattern_rule->next = rule;
-      last_pattern_rule = rule;
-    }
+  /* There was no rule to replace.  */
+  add_rule (rule);
 
   return 1;
+}
+
+static void
+add_rule (struct rule *rule)
+{
+  rule->list_head = 0;
+  rule->next = &pattern_rules;
+  rule->prev = pattern_rules.prev;
+  pattern_rules.prev->next = rule;
+  pattern_rules.prev = rule;
+}
+
+static void
+remove_rule (struct rule *rule)
+{
+  rule->prev->next = rule->next;
+  rule->next->prev = rule->prev;
 }
 
 
@@ -402,14 +401,11 @@ install_pattern_rule (struct pspec *p, int terminal)
 }
 
 
-/* Free all the storage used in RULE and take it out of the
-   pattern_rules chain.  LASTRULE is the rule whose next pointer
-   points to RULE.  */
+/* Free all the storage used in RULE.  */
 
 static void
-freerule (struct rule *rule, struct rule *lastrule)
+free_rule (struct rule *rule)
 {
-  struct rule *next = rule->next;
   struct dep *dep;
 
   dep = rule->deps;
@@ -436,16 +432,6 @@ freerule (struct rule *rule, struct rule *lastrule)
        pointer from the `struct file' for the suffix rule.  */
 
   free (rule);
-
-  if (pattern_rules == rule)
-    if (lastrule != 0)
-      abort ();
-    else
-      pattern_rules = next;
-  else if (lastrule != 0)
-    lastrule->next = next;
-  if (last_pattern_rule == rule)
-    last_pattern_rule = lastrule;
 }
 
 /* Create a new pattern rule with the targets in the nil-terminated array
@@ -517,7 +503,7 @@ print_rule_data_base (void)
   puts (_("\n# Implicit Rules"));
 
   rules = terminal = 0;
-  for (r = pattern_rules; r != 0; r = r->next)
+  for (r = pattern_rules.next; !r->list_head; r = r->next)
     {
       ++rules;
 

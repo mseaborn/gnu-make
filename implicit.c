@@ -287,7 +287,7 @@ pattern_search (struct file *file, int archive,
      and may be considered.  Put them in TRYRULES.  */
 
   nrules = 0;
-  for (rule = pattern_rules; rule != 0; rule = rule->next)
+  for (rule = pattern_rules.next; !rule->list_head; rule = rule->next)
     {
       unsigned int ti;
 

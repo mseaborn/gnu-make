@@ -21,7 +21,9 @@ this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 struct rule
   {
-    struct rule *next;
+    int list_head;
+    struct rule *prev, *next;
+    
     const char **targets;	/* Targets of the rule.  */
     unsigned int *lens;		/* Lengths of each target.  */
     const char **suffixes;	/* Suffixes (after `%') of each target.  */
@@ -39,8 +41,7 @@ struct pspec
   };
 
 
-extern struct rule *pattern_rules;
-extern struct rule *last_pattern_rule;
+extern struct rule pattern_rules;
 extern unsigned int num_pattern_rules;
 
 extern unsigned int max_pattern_deps;

@@ -52,6 +52,7 @@ extern struct file *suffix_file;
 extern unsigned int maxsuffix;
 
 
+void rule_init (void);
 void count_implicit_rule_limits (void);
 void convert_to_pattern (void);
 void install_pattern_rule (struct pspec *p, int terminal);

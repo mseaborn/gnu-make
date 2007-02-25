@@ -544,6 +544,7 @@ initialize_global_hash_tables (void)
   init_hash_files ();
   hash_init_directories ();
   hash_init_function_table ();
+  rule_init ();
 }
 
 static const char *

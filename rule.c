@@ -16,6 +16,8 @@ A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
+#include <assert.h>
+
 #include "make.h"
 
 #include <assert.h>
@@ -30,10 +32,21 @@ this program.  If not, see <http://www.gnu.org/licenses/>.  */
 static void add_rule (struct rule *rule);
 static void remove_rule (struct rule *rule);
 static void free_rule (struct rule *rule);
+
+/* List of rules with the same target. */
+struct rule_target_list
+{
+  const char *target;
+  int target_num;
+  struct rule *rule;
+  struct rule_target_list *next;
+};
 
 /* Chain of all pattern rules.  */
 
 struct rule pattern_rules = { 1, &pattern_rules, &pattern_rules };
+
+struct hash_table rules_by_target;
 
 /* Number of rules in the chain.  */
 
@@ -60,6 +73,30 @@ struct file *suffix_file;
 
 unsigned int maxsuffix;
 
+static unsigned long
+rule_hash_1 (const void *key)
+{
+  return_ISTRING_HASH_1 (((struct rule_target_list *) key)->target);
+}
+
+static unsigned long
+rule_hash_2 (const void *key)
+{
+  return_ISTRING_HASH_2 (((struct rule_target_list *) key)->target);
+}
+
+static int
+rule_hash_cmp (const void *x, const void *y)
+{
+  return_ISTRING_COMPARE (((struct rule_target_list *) x)->target,
+			  ((struct rule_target_list *) y)->target);
+}
+
+void rule_init ()
+{
+  hash_init (&rules_by_target, 199, rule_hash_1, rule_hash_2, rule_hash_cmp);
+}
+
 /* Compute the maximum dependency length and maximum number of
    dependencies of all implicit rules.  Also sets the subdir
    flag for a rule when appropriate.  */
@@ -343,6 +380,20 @@ new_pattern_rule (struct rule *rule, int override)
 static void
 add_rule (struct rule *rule)
 {
+  /* Add to hash table. */
+  int i;
+  for (i = 0; i < rule->num; i++)
+    {
+      struct rule_target_list *node =
+	(void *) xmalloc (sizeof (struct rule_target_list));
+      node->target = rule->targets[i];
+      node->target_num = i;
+      node->rule = rule;
+      node->next = hash_find_item (&rules_by_target, node);
+      hash_insert (&rules_by_target, node);
+    }
+
+  /* Add to list. */
   rule->list_head = 0;
   rule->next = &pattern_rules;
   rule->prev = pattern_rules.prev;
@@ -353,6 +404,30 @@ add_rule (struct rule *rule)
 static void
 remove_rule (struct rule *rule)
 {
+  /* Remove from hash table. */
+  int i;
+  for (i = 0; i < rule->num; i++)
+    {
+      struct rule_target_list key, **list;
+      key.target = rule->targets[i];
+      list = (struct rule_target_list **) hash_find_slot (&rules_by_target,
+							  &key);
+      while(1)
+	{
+	  assert (*list != NULL);
+	  if ((*list)->rule == rule &&
+	      (*list)->target_num == i)
+	    {
+	      struct rule_target_list *node = *list;
+	      *list = node->next;
+	      free (node);
+	      break;
+	    }
+	  list = &(*list)->next;
+	}
+    }
+
+  /* Remove from list. */
   rule->prev->next = rule->next;
   rule->next->prev = rule->prev;
 }

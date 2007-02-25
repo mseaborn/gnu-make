@@ -64,8 +64,7 @@ unsigned int maxsuffix;
 
 /* Compute the maximum dependency length and maximum number of
    dependencies of all implicit rules.  Also sets the subdir
-   flag for a rule when appropriate, possibly removing the rule
-   completely when appropriate.  */
+   flag for a rule when appropriate.  */
 
 void
 count_implicit_rule_limits (void)
@@ -79,13 +78,10 @@ count_implicit_rule_limits (void)
 
   name = 0;
   namelen = 0;
-  rule = pattern_rules;
-  lastrule = 0;
-  while (rule != 0)
+  for (rule = pattern_rules; rule != NULL; rule = rule->next)
     {
       unsigned int ndeps = 0;
       struct dep *dep;
-      struct rule *next = rule->next;
 
       ++num_pattern_rules;
 
@@ -138,9 +134,6 @@ count_implicit_rule_limits (void)
 
       if (ndeps > max_pattern_deps)
 	max_pattern_deps = ndeps;
-
-      lastrule = rule;
-      rule = next;
     }
 
   if (name != 0)

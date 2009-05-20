@@ -26,6 +26,7 @@ this program.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "commands.h"
 #include "variable.h"
 #include "debug.h"
+#include "hooks.h"
 
 #include <string.h>
 
@@ -227,6 +228,8 @@ unsigned long job_counter = 0;
 /* Number of jobserver tokens this instance is currently using.  */
 
 unsigned int jobserver_tokens = 0;
+
+extern void (*job_hook)(struct file *file, const char *cmd) = NULL;
 
 #ifdef WINDOWS32
 /*
@@ -1077,6 +1080,9 @@ start_job_command (struct child *child)
 	}
       return;
     }
+
+  if (job_hook)
+    job_hook (child, p);
 
   /* Print out the command.  If silent, we call `message' with null so it
      can log the working directory before the command's own error messages

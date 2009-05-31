@@ -66,6 +66,41 @@ all: foo.o bar.o
         self.assertEquals(read_file(os.path.join(temp_dir, "foo.o")),
                           "compiled secondary foo\n")
 
+    def test_noerror(self):
+        temp_dir = self.make_temp_dir()
+        write_file(os.path.join(temp_dir, "Makefile"), """
+all:
+\t-false
+""")
+        log_file = os.path.join(temp_dir, "log")
+        subprocess.check_call(["env", "MAKE_LOG=%s" % log_file,
+                               os.path.join(here_dir, "wrapper.py")],
+                              cwd=temp_dir)
+        # Rebuild without running make
+        replay.replay(log_file)
+
+    def test_phony_targets(self):
+        temp_dir = self.make_temp_dir()
+        write_file(os.path.join(temp_dir, "Makefile"), """
+.PHONY: foo
+all: foo
+\techo all > $@
+foo: bar
+\techo phony target
+bar:
+\techo contents > $@
+""")
+        log_file = os.path.join(temp_dir, "log")
+        subprocess.check_call(["env", "MAKE_LOG=%s" % log_file,
+                               os.path.join(here_dir, "wrapper.py")],
+                              cwd=temp_dir)
+        os.unlink(os.path.join(temp_dir, "all"))
+        # This should not skip running the command for "all".
+        # No file "foo" needs to be present because "foo" is phony.
+        replay.replay(log_file)
+        self.assertEquals(read_file(os.path.join(temp_dir, "all")),
+                          "all\n")
+
 
 if __name__ == "__main__":
     unittest.main()

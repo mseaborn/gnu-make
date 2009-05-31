@@ -70,7 +70,7 @@ struct file
 	cs_deps_running,	/* Dep commands running.  */
 	cs_running,		/* Commands running.  */
 	cs_finished		/* Commands finished.  */
-      } command_state ENUM_BITFIELD (2);
+      } command_state; // ENUM_BITFIELD (2);
 
     unsigned int precious:1;	/* Non-0 means don't delete file on quit */
     unsigned int low_resolution_time:1;	/* Nonzero if this file's time stamp

@@ -28,11 +28,36 @@ class File(ctypes.Structure):
 class Dep(ctypes.Structure):
     pass
 
+file_timestamp_type = ctypes.c_ulonglong
+
 File._fields_ = [("name", ctypes.c_char_p),
                  ("hname", ctypes.c_char_p),
                  ("vpath", ctypes.c_char_p),
                  ("deps", ctypes.POINTER(Dep)),
-                 ("commands", ctypes.POINTER(Commands))]
+                 ("commands", ctypes.POINTER(Commands)),
+                 ("command_flag", ctypes.c_int),
+                 ("stem", ctypes.c_char_p),
+                 ("also_make", ctypes.POINTER(Dep)),
+                 ("last_mtime", file_timestamp_type),
+                 ("mtime_before_update", file_timestamp_type),
+                 ("prev", ctypes.POINTER(File)),
+                 ("last", ctypes.POINTER(File)),
+                 ("renamed", ctypes.POINTER(File)),
+                 ("variables", ctypes.c_void_p),
+                 ("pat_variables", ctypes.c_void_p),
+                 ("parent", ctypes.POINTER(File)),
+                 ("double_colon", ctypes.POINTER(File)),
+                 ("update_status", ctypes.c_short),
+                 ("command_state", ctypes.c_uint), # bitfield disabled
+                 ("precious", ctypes.c_uint, 1),
+                 ("low_resolution_time", ctypes.c_uint, 1),
+                 ("tried_implicit", ctypes.c_uint, 1),
+                 ("updating", ctypes.c_uint, 1),
+                 ("updated", ctypes.c_uint, 1),
+                 ("is_target", ctypes.c_uint, 1),
+                 ("cmd_target", ctypes.c_uint, 1),
+                 ("phony", ctypes.c_uint, 1),
+                 ]
 
 Dep._fields_ = [("next", ctypes.POINTER(Dep)),
                 ("name", ctypes.c_char_p),
@@ -45,7 +70,11 @@ class JobChild(ctypes.Structure):
                 ("environment", ctypes.c_void_p),
                 ("command_lines", ctypes.POINTER(ctypes.c_char_p)),
                 ("command_line", ctypes.c_uint),
-                ("command_ptr", ctypes.c_char_p)]
+                ("command_ptr", ctypes.c_char_p),
+                ("pid", ctypes.c_uint),
+                ("sh_batch_file", ctypes.c_char_p),
+                ("remote", ctypes.c_int, 1),
+                ("noerror", ctypes.c_int, 1)]
 
 
 def dump_target(file, indent):
@@ -72,12 +101,15 @@ callback_type = ctypes.CFUNCTYPE(
 def hook(job, cmd):
     job = job.contents
     target_file = job.file.contents
-    dep_files = [dep.file.contents.name for dep in target_file.get_deps()]
+    dep_files = [{"file": dep.file.contents.name,
+                  "phony": dep.file.contents.phony}
+                 for dep in target_file.get_deps()]
     info = {"file": job.file.contents.name,
             "cmd": cmd,
             "cwd": os.getcwd(),
             "deps": dep_files,
             "recmake": cmd.startswith(__file__ + " "),
+            "noerror": bool(job.noerror),
             }
     if log_fh is not None:
         log_fh.write("%r\n" % info)
